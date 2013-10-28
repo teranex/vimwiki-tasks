@@ -1,6 +1,5 @@
 " TODO: update tasks on opening
-" TODO: support task without time but with #TW identifier
-" TODO: update existing tasks in TW when writing (including completed!)
+" TODO: finish tasks in TW when they are marked as done in vimwiki
 " TODO: how to handle deleted tasks?
 " TODO: hide the uuid's
 " TODO: default params for task
@@ -14,7 +13,7 @@ function! vimwiki_tasks#write()
         let l:line = getline(l:i)
         " check if this is a line with an open task with a due date
         if match(l:line, '\v\* \[[^X]\].*(\(\d{4}-\d\d-\d\d( \d\d:\d\d)?\)|#TW\s*$)') != -1
-            let l:task = vimwiki_tasks#create_task(l:line, l:defaults)
+            let l:task = vimwiki_tasks#parse_task(l:line, l:defaults)
             " add the task if it does not have a uuid
             if l:task.uuid == ""
                 call system(l:task.task_cmd.' add '.l:task.description.' '.l:task.task_meta)
@@ -61,7 +60,7 @@ function! vimwiki_tasks#get_defaults()
     return l:defaults
 endfunction
 
-function! vimwiki_tasks#create_task(line, defaults)
+function! vimwiki_tasks#parse_task(line, defaults)
     let l:task = vimwiki_tasks#empty_task()
     " create the task
     let l:match = matchlist(a:line, '\v\* \[[^X]\]\s+(.*)\s*')
