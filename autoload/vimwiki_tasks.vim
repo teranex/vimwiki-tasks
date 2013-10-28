@@ -4,6 +4,8 @@
 " TODO: how to handle deleted tasks?
 " TODO: hide the uuid's
 " TODO: default params for task
+" TODO: add utility task_notifier scripts
+" TODO: escape task text
 
 function! vimwiki_tasks#write()
     let l:defaults = vimwiki_tasks#get_defaults()
@@ -11,7 +13,7 @@ function! vimwiki_tasks#write()
     while l:i <= line('$')
         let l:line = getline(l:i)
         " check if this is a line with an open task with a due date
-        if match(l:line, '\v\* \[[^X]\].*\(\d{4}-\d\d-\d\d( \d\d:\d\d)?\)') != -1
+        if match(l:line, '\v\* \[[^X]\].*(\(\d{4}-\d\d-\d\d( \d\d:\d\d)?\)|#TW\s*$)') != -1
             let l:task = vimwiki_tasks#create_task(l:line, l:defaults)
             " add the task if it does not have a uuid
             if l:task.uuid == ""
@@ -21,8 +23,8 @@ function! vimwiki_tasks#write()
                 " TODO: check for valid id and successful task creation before
                 " continuing?
                 let l:uuid = substitute(system("task ".l:id." uuid"), "\n", "", "")
-                " add the uuid to the line
-                call setline(l:i, l:line." #".l:uuid)
+                " add the uuid to the line and remove the #TW indicator
+                call setline(l:i, <SID>RemoveTwIndicator(l:line)." #".l:uuid)
                 " annotate the task to reference the vimwiki file
                 let l:cmd = 'task '.l:id.' annotate vimwiki:'.expand('%:p')
                 call system(l:cmd)
@@ -93,14 +95,19 @@ function! vimwiki_tasks#create_task(line, defaults)
         let l:task.description = substitute(l:task.description, '\v#[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}', "", "")
     endif
 
+    " remove any #TW at the end (= a new task without a due)
+    let l:task.description = <SID>RemoveTwIndicator(l:task.description)
+
+    " and strip any whitespace
     let l:task.description = <SID>Strip(l:task.description)
+    echom l:task.description
 
     return l:task
 endfunction
 
 function! vimwiki_tasks#load_task(uuid)
     let l:task = vimwiki_tasks#empty_task()
-    let l:cmd = 'task rc.verbose=nothing rc.defaultwidth=999 rc.dateformat.info=Y-M-DTH:N rc.color=off uuid:'.a:uuid.' info | grep "^\(ID\|Description\|Status\|Due\)"'
+    let l:cmd = 'task rc.verbose=nothing rc.defaultwidth=999 rc.dateformat.info=Y-M-DTH:N rc.color=off uuid:'.a:uuid.' info | grep "^\(ID\|Description\|Status\|Due\|Project\)"'
     let l:result = split(system(l:cmd), '\n')
     for l:result_line in l:result
         let l:match = matchlist(l:result_line, '\v(\w+)\s+(.*)')
@@ -111,6 +118,10 @@ endfunction
 
 function! s:Strip(input_string)
     return substitute(a:input_string, '^\s*\(.\{-}\)\s*$', '\1', '')
+endfunction
+
+function! s:RemoveTwIndicator(input)
+     return substitute(a:input, '\v#TW\s*$', "", "")
 endfunction
 
 function! vimwiki_tasks#empty_task()
