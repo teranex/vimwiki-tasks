@@ -100,7 +100,6 @@ function! vimwiki_tasks#create_task(line, defaults)
 
     " and strip any whitespace
     let l:task.description = <SID>Strip(l:task.description)
-    echom l:task.description
 
     return l:task
 endfunction
@@ -121,7 +120,7 @@ function! s:Strip(input_string)
 endfunction
 
 function! s:RemoveTwIndicator(input)
-     return substitute(a:input, '\v#TW\s*$', "", "")
+     return substitute(a:input, '\v\s?#TW\s*$', "", "")
 endfunction
 
 function! vimwiki_tasks#empty_task()
