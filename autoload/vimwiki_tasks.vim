@@ -2,9 +2,9 @@
 " TODO: finish tasks in TW when they are marked as done in vimwiki
 " TODO: how to handle deleted tasks?
 " TODO: hide the uuid's
-" TODO: default params for task
 " TODO: add utility task_notifier scripts
 " TODO: escape task text
+" TODO: `:InsertTask <ID>` command
 
 function! vimwiki_tasks#write()
     let l:defaults = vimwiki_tasks#get_defaults()
@@ -30,17 +30,47 @@ function! vimwiki_tasks#write()
             " see if we need to update the task in TW
             else
                 let l:tw_task = vimwiki_tasks#load_task(l:task.uuid)
-                " compare:
-                "   - description
-                "   - due
-                "   - project
-                "   - status (XXX: not yet, because we are only dealing with open tasks here)
-                "   - tags? (XXX: are updated but not compared)
                 if l:task.description !=# l:tw_task.description || l:task.due !=# l:tw_task.due || l:task.project !=# l:defaults.project
                     let l:cmd = l:task.task_cmd.' uuid:'.l:task.uuid.' modify '.l:task.description.' '.l:task.task_meta
                     call system(l:cmd)
                 endif
             endif
+        endif
+        let l:i += 1
+    endwhile
+endfunction
+
+function! vimwiki_tasks#read()
+    let l:defaults = vimwiki_tasks#get_defaults()
+    let l:i = 1
+    while l:i <= line('$')
+        let l:line = getline(l:i)
+        " if this is an open task with a uuid, check if we can update it from TW
+        if match(l:line, '\v\* \[[^X]\].*#[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}') != -1
+            let l:task = vimwiki_tasks#parse_task(l:line, l:defaults)
+            let l:tw_task = vimwiki_tasks#load_task(l:task.uuid)
+            if l:tw_task.status ==# 'Completed'
+                " TODO: handle completed task (mark as completed)
+            elseif l:tw_task.status ==# 'Deleted'
+                " TODO: handle deleted task (remove the uuid from the line?)
+            else
+                " task is still open in TW, see if it was updated
+                if l:task.description !=# l:tw_task.description || l:task.due !=# l:tw_task.due
+                    " build the new task line
+                    " TODO: deal with additional indents
+                    " TODO: deal with progress indicators ([.], [0], ...)
+                    let l:newline = "* [ ] ".l:tw_task.description
+                    if l:tw_task.due != ""
+                        let l:due_printable = substitute(l:tw_task.due, 'T', " ", "")
+                        let l:newline .= " (".l:due_printable.")"
+                    endif
+                    let l:newline .= " #".l:tw_task.uuid
+                    " and replace it in the file
+                    call setline(l:i, l:newline)
+                    " mark the buffer as modified
+                    let &mod = 1
+                endif
+            end
         endif
         let l:i += 1
     endwhile
@@ -105,7 +135,7 @@ endfunction
 
 function! vimwiki_tasks#load_task(uuid)
     let l:task = vimwiki_tasks#empty_task()
-    let l:cmd = 'task rc.verbose=nothing rc.defaultwidth=999 rc.dateformat.info=Y-M-DTH:N rc.color=off uuid:'.a:uuid.' info | grep "^\(ID\|Description\|Status\|Due\|Project\)"'
+    let l:cmd = 'task rc.verbose=nothing rc.defaultwidth=999 rc.dateformat.info=Y-M-DTH:N rc.color=off uuid:'.a:uuid.' info | grep "^\(ID\|UUID\|Description\|Status\|Due\|Project\)"'
     let l:result = split(system(l:cmd), '\n')
     for l:result_line in l:result
         let l:match = matchlist(l:result_line, '\v(\w+)\s+(.*)')
