@@ -5,6 +5,7 @@
 " TODO: add utility task_notifier scripts
 " TODO: escape task text
 " TODO: `:InsertTask <ID>` command
+" TODO: tags are removed from vimwiki after sync, add all tags into tasks?
 
 function! vimwiki_tasks#write()
     let l:defaults = vimwiki_tasks#get_defaults()
@@ -59,7 +60,8 @@ function! vimwiki_tasks#read()
                     " build the new task line
                     " TODO: deal with additional indents
                     " TODO: deal with progress indicators ([.], [0], ...)
-                    let l:newline = "* [ ] ".l:tw_task.description
+                    let l:task_struct = matchlist(l:line, '\v^(\s*)\* \[(.)\]')
+                    let l:newline = l:task_struct[1]."* [".l:task_struct[2]."] ".l:tw_task.description
                     if l:tw_task.due != ""
                         let l:due_printable = substitute(l:tw_task.due, 'T', " ", "")
                         let l:newline .= " (".l:due_printable.")"
