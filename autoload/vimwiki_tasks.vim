@@ -16,21 +16,21 @@ function! vimwiki_tasks#write()
             let l:task = vimwiki_tasks#parse_task(l:line, l:defaults)
             " add the task if it does not have a uuid
             if l:task.uuid == ""
-                call system(l:task.task_cmd.' add '.shellescape(l:task.description).' '.l:task.task_meta)
+                call <SID>System(l:task.task_cmd.' add '.shellescape(l:task.description).' '.l:task.tags.' '.l:task.task_meta)
                 " find the id and the uuid of the newly created task
-                let l:id = substitute(system("task newest limit:1 rc.verbose=nothing rc.color=off rc.defaultwidth=999 rc.report.newest.columns=id rc.report.newest.labels=ID"), "\n", "", "")
+                let l:id = substitute(<SID>System("task newest limit:1 rc.verbose=nothing rc.color=off rc.defaultwidth=999 rc.report.newest.columns=id rc.report.newest.labels=ID"), "\n", "", "")
                 " TODO: check for valid id and successful task creation before continuing?
-                let l:uuid = substitute(system("task ".l:id." uuid"), "\n", "", "")
+                let l:uuid = substitute(<SID>System("task ".l:id." uuid"), "\n", "", "")
                 " add the uuid to the line and remove the #TW indicator
                 call setline(l:i, <SID>RemoveTwIndicator(l:line)." #".l:uuid)
                 " annotate the task to reference the vimwiki file
                 let l:cmd = 'task '.l:id.' annotate vimwiki:'.expand('%:p')
-                call system(l:cmd)
+                call <SID>System(l:cmd)
             " see if we need to update the task in TW
             else
                 let l:tw_task = vimwiki_tasks#load_task(l:task.uuid)
                 if l:task.description !=# l:tw_task.description || l:task.due !=# l:tw_task.due || l:task.project !=# l:defaults.project
-                    call system(l:task.task_cmd.' uuid:'.l:task.uuid.' modify '.shellescape(l:task.description).' '.l:task.task_meta)
+                    call <SID>System(l:task.task_cmd.' uuid:'.l:task.uuid.' modify '.shellescape(l:task.description).' '.l:task.task_meta)
                 endif
             endif
         endif
@@ -67,13 +67,17 @@ function! vimwiki_tasks#read()
 endfunction
 
 function! vimwiki_tasks#get_defaults()
-    let l:defaults = {'project': ''}
+    let l:defaults = {'project': '', 'tags': ''}
     let l:i = 1
     while l:i <= 10
         let l:line = getline(l:i)
         let l:project = matchstr(l:line, '\v\%\%\s*Project:\s*\zs(\w+)')
         if l:project != ""
             let l:defaults.project = l:project
+        endif
+        let l:tags = matchstr(l:line, '\v\%\%\s*Tags:\s*\zs(.+)\s*$')
+        if l:tags != ""
+            let l:defaults.tags = l:tags
         endif
         let l:i +=1
     endwhile
@@ -111,6 +115,9 @@ function! vimwiki_tasks#parse_task(line, defaults)
     if has_key(a:defaults, 'project')
         let l:task.task_meta .= ' project:'.a:defaults.project
     endif
+    if has_key(a:defaults, 'tags')
+        let l:task.tags = a:defaults.tags
+    endif
     " add due date if available
     let l:due = matchlist(a:line, '\v\((\d{4}-\d\d-\d\d)( (\d\d:\d\d))?\)')
     if !empty(l:due)
@@ -145,7 +152,7 @@ endfunction
 function! vimwiki_tasks#load_task(uuid)
     let l:task = vimwiki_tasks#empty_task()
     let l:cmd = 'task rc.verbose=nothing rc.defaultwidth=999 rc.dateformat.info=Y-M-DTH:N rc.color=off uuid:'.a:uuid.' info | grep "^\(ID\|UUID\|Description\|Status\|Due\|Project\)"'
-    let l:result = split(system(l:cmd), '\n')
+    let l:result = split(<SID>System(l:cmd), '\n')
     for l:result_line in l:result
         let l:match = matchlist(l:result_line, '\v(\w+)\s+(.*)')
         let l:task[tolower(l:match[1])] = l:match[2]
@@ -158,9 +165,14 @@ function! s:Strip(input_string)
 endfunction
 
 function! s:RemoveTwIndicator(input)
-     return substitute(a:input, '\v\s?#TW\s*$', "", "")
+    return substitute(a:input, '\v\s?#TW\s*$', "", "")
+endfunction
+
+function! s:System(cmd)
+    " echom a:cmd
+    return system(a:cmd)
 endfunction
 
 function! vimwiki_tasks#empty_task()
-    return {'id': 0, 'description': '', 'due': '', 'status': '', 'project': ''}
+    return {'id': 0, 'description': '', 'due': '', 'status': '', 'project': '', 'tags': ''}
 endfunction
