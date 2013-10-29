@@ -29,6 +29,7 @@ function! vimwiki_tasks#write()
             " see if we need to update the task in TW
             else
                 let l:tw_task = vimwiki_tasks#load_task(l:task.uuid)
+                " XXX: tags are not updated
                 if l:task.description !=# l:tw_task.description || l:task.due !=# l:tw_task.due || l:task.project !=# l:defaults.project
                     call <SID>System(l:task.task_cmd.' uuid:'.l:task.uuid.' modify '.shellescape(l:task.description).' '.l:task.task_meta)
                 endif
@@ -115,9 +116,6 @@ function! vimwiki_tasks#parse_task(line, defaults)
     if has_key(a:defaults, 'project')
         let l:task.task_meta .= ' project:'.a:defaults.project
     endif
-    if has_key(a:defaults, 'tags')
-        let l:task.tags = a:defaults.tags
-    endif
     " add due date if available
     let l:due = matchlist(a:line, '\v\((\d{4}-\d\d-\d\d)( (\d\d:\d\d))?\)')
     if !empty(l:due)
@@ -138,6 +136,20 @@ function! vimwiki_tasks#parse_task(line, defaults)
     let l:task.uuid = matchstr(a:line, '\v#\zs([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})')
     if l:task.uuid != ""
         let l:task.description = substitute(l:task.description, '\v#[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}', "", "")
+    endif
+
+    " add default tags
+    if has_key(a:defaults, 'tags')
+        let l:task.tags = a:defaults.tags
+    endif
+    if l:task.due == ""
+        let l:task.tags .= ' '.vimwiki_tasks#config('tags_nodue', '')
+    else
+        if get(l:due, 3, '') != ""
+            let l:task.tags .= ' '.vimwiki_tasks#config('tags_duetime', '')
+        else
+            let l:task.tags .= ' '.vimwiki_tasks#config('tags_duedate', '')
+        endif
     endif
 
     " remove any #TW at the end (= a new task without a due)
@@ -175,4 +187,12 @@ endfunction
 
 function! vimwiki_tasks#empty_task()
     return {'id': 0, 'description': '', 'due': '', 'status': '', 'project': '', 'tags': ''}
+endfunction
+
+function! vimwiki_tasks#config(key, default)
+    if exists('g:vimwiki_tasks_'.a:key)
+        execute "let g:vimwiki_tasks_tmp = g:vimwiki_tasks_".a:key
+        return g:vimwiki_tasks_tmp
+    endif
+    return a:default
 endfunction
