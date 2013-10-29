@@ -1,4 +1,3 @@
-" TODO: update tasks on opening
 " TODO: finish tasks in TW when they are marked as done in vimwiki
 " TODO: how to handle deleted tasks?
 " TODO: hide the uuid's
@@ -51,24 +50,15 @@ function! vimwiki_tasks#read()
             let l:task = vimwiki_tasks#parse_task(l:line, l:defaults)
             let l:tw_task = vimwiki_tasks#load_task(l:task.uuid)
             if l:tw_task.status ==# 'Completed'
-                " TODO: handle completed task (mark as completed)
+                call setline(l:i, vimwiki_tasks#build_task(l:line, l:tw_task, 1))
+                let &mod = 1
             elseif l:tw_task.status ==# 'Deleted'
                 " TODO: handle deleted task (remove the uuid from the line?)
             else
                 " task is still open in TW, see if it was updated
                 if l:task.description !=# l:tw_task.description || l:task.due !=# l:tw_task.due
-                    " build the new task line
-                    " TODO: deal with additional indents
-                    " TODO: deal with progress indicators ([.], [0], ...)
-                    let l:task_struct = matchlist(l:line, '\v^(\s*)\* \[(.)\]')
-                    let l:newline = l:task_struct[1]."* [".l:task_struct[2]."] ".l:tw_task.description
-                    if l:tw_task.due != ""
-                        let l:due_printable = substitute(l:tw_task.due, 'T', " ", "")
-                        let l:newline .= " (".l:due_printable.")"
-                    endif
-                    let l:newline .= " #".l:tw_task.uuid
                     " and replace it in the file
-                    call setline(l:i, l:newline)
+                    call setline(l:i, vimwiki_tasks#build_task(l:line, l:tw_task))
                     " mark the buffer as modified
                     let &mod = 1
                 endif
@@ -90,6 +80,25 @@ function! vimwiki_tasks#get_defaults()
         let l:i +=1
     endwhile
     return l:defaults
+endfunction
+
+" a:1 boolean, 1 if the task should be marked as finished, otherwise the state
+"              is reused from the task text
+function! vimwiki_tasks#build_task(line, tw_task, ...)
+    " build the new task line
+    let l:match = matchlist(a:line, '\v^(\s*)\* \[(.)\]')
+    let l:indent = l:match[1]
+    let l:state = l:match[2]
+    if a:1 == 1
+        let l:state = 'X'
+    endif
+    let l:newline = l:indent."* [".l:state."] ".a:tw_task.description
+    if a:tw_task.due != ""
+        let l:due_printable = substitute(a:tw_task.due, 'T', " ", "")
+        let l:newline .= " (".l:due_printable.")"
+    endif
+    let l:newline .= " #".a:tw_task.uuid
+    return l:newline
 endfunction
 
 function! vimwiki_tasks#parse_task(line, defaults)
