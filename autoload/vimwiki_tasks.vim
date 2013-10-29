@@ -5,6 +5,7 @@
 " TODO: escape task text
 " TODO: `:InsertTask <ID>` command
 " TODO: tags are removed from vimwiki after sync, add all tags into tasks?
+" TODO: add default tags for tasks with due date, due time, without due
 
 function! vimwiki_tasks#write()
     let l:defaults = vimwiki_tasks#get_defaults()
@@ -12,15 +13,15 @@ function! vimwiki_tasks#write()
     while l:i <= line('$')
         let l:line = getline(l:i)
         " check if this is a line with an open task with a due date
+        " TODO: also update open tasks with a UUID
         if match(l:line, '\v\* \[[^X]\].*(\(\d{4}-\d\d-\d\d( \d\d:\d\d)?\)|#TW\s*$)') != -1
             let l:task = vimwiki_tasks#parse_task(l:line, l:defaults)
             " add the task if it does not have a uuid
             if l:task.uuid == ""
-                call system(l:task.task_cmd.' add '.l:task.description.' '.l:task.task_meta)
+                call system(l:task.task_cmd.' add '.shellescape(l:task.description).' '.l:task.task_meta)
                 " find the id and the uuid of the newly created task
                 let l:id = substitute(system("task newest limit:1 rc.verbose=nothing rc.color=off rc.defaultwidth=999 rc.report.newest.columns=id rc.report.newest.labels=ID"), "\n", "", "")
-                " TODO: check for valid id and successful task creation before
-                " continuing?
+                " TODO: check for valid id and successful task creation before continuing?
                 let l:uuid = substitute(system("task ".l:id." uuid"), "\n", "", "")
                 " add the uuid to the line and remove the #TW indicator
                 call setline(l:i, <SID>RemoveTwIndicator(l:line)." #".l:uuid)
@@ -31,7 +32,8 @@ function! vimwiki_tasks#write()
             else
                 let l:tw_task = vimwiki_tasks#load_task(l:task.uuid)
                 if l:task.description !=# l:tw_task.description || l:task.due !=# l:tw_task.due || l:task.project !=# l:defaults.project
-                    let l:cmd = l:task.task_cmd.' uuid:'.l:task.uuid.' modify '.l:task.description.' '.l:task.task_meta
+                    let l:cmd = l:task.task_cmd.' uuid:'.l:task.uuid.' modify '.shellescape(l:task.description).' '.l:task.task_meta
+                    echom l:cmd
                     call system(l:cmd)
                 endif
             endif
@@ -89,7 +91,7 @@ function! vimwiki_tasks#build_task(line, tw_task, ...)
     let l:match = matchlist(a:line, '\v^(\s*)\* \[(.)\]')
     let l:indent = l:match[1]
     let l:state = l:match[2]
-    if a:1 == 1
+    if a:0 > 0 && a:1 == 1
         let l:state = 'X'
     endif
     let l:newline = l:indent."* [".l:state."] ".a:tw_task.description
