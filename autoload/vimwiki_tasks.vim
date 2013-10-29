@@ -2,7 +2,6 @@
 " TODO: how to handle deleted tasks?
 " TODO: hide the uuid's
 " TODO: add utility task_notifier scripts
-" TODO: escape task text
 " TODO: `:InsertTask <ID>` command
 " TODO: tags are removed from vimwiki after sync, add all tags into tasks?
 " TODO: add default tags for tasks with due date, due time, without due
@@ -13,8 +12,7 @@ function! vimwiki_tasks#write()
     while l:i <= line('$')
         let l:line = getline(l:i)
         " check if this is a line with an open task with a due date
-        " TODO: also update open tasks with a UUID
-        if match(l:line, '\v\* \[[^X]\].*(\(\d{4}-\d\d-\d\d( \d\d:\d\d)?\)|#TW\s*$)') != -1
+        if match(l:line, '\v\* \[[^X]\].*(\(\d{4}-\d\d-\d\d( \d\d:\d\d)?\)|#TW\s*$|#[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})') != -1
             let l:task = vimwiki_tasks#parse_task(l:line, l:defaults)
             " add the task if it does not have a uuid
             if l:task.uuid == ""
@@ -32,9 +30,7 @@ function! vimwiki_tasks#write()
             else
                 let l:tw_task = vimwiki_tasks#load_task(l:task.uuid)
                 if l:task.description !=# l:tw_task.description || l:task.due !=# l:tw_task.due || l:task.project !=# l:defaults.project
-                    let l:cmd = l:task.task_cmd.' uuid:'.l:task.uuid.' modify '.shellescape(l:task.description).' '.l:task.task_meta
-                    echom l:cmd
-                    call system(l:cmd)
+                    call system(l:task.task_cmd.' uuid:'.l:task.uuid.' modify '.shellescape(l:task.description).' '.l:task.task_meta)
                 endif
             endif
         endif
