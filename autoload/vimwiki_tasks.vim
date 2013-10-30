@@ -1,10 +1,11 @@
-" TODO: finish tasks in TW when they are marked as done in vimwiki
 " TODO: how to handle deleted tasks?
 " TODO: hide the uuid's
 " TODO: add utility task_notifier scripts
 " TODO: `:InsertTask <ID>` command
 " TODO: tags are removed from vimwiki after sync, add all tags into tasks?
-" TODO: add default tags for tasks with due date, due time, without due
+
+" a list of open tasks which should be checked to see if they are completed when the file is written
+let b:open_tasks = []
 
 function! vimwiki_tasks#write()
     let l:defaults = vimwiki_tasks#get_defaults()
@@ -34,12 +35,19 @@ function! vimwiki_tasks#write()
                     call <SID>System(l:task.task_cmd.' uuid:'.l:task.uuid.' modify '.shellescape(l:task.description).' '.l:task.task_meta)
                 endif
             endif
+        " check if the line is a closed task which was still open when reading the file
+        elseif match(l:line, '\v\* \[X\].*#[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}') != -1
+            let l:task = vimwiki_tasks#parse_task(l:line, l:defaults)
+            if index(b:open_tasks, l:task.uuid) >= 0
+                call <SID>System('task uuid:'.l:task.uuid.' done')
+            endif
         endif
         let l:i += 1
     endwhile
 endfunction
 
 function! vimwiki_tasks#read()
+    let b:open_tasks = []
     let l:defaults = vimwiki_tasks#get_defaults()
     let l:i = 1
     while l:i <= line('$')
@@ -61,6 +69,8 @@ function! vimwiki_tasks#read()
                     " mark the buffer as modified
                     let &mod = 1
                 endif
+                " and add the open task to the list for later reference
+                call add(b:open_tasks, l:task.uuid)
             end
         endif
         let l:i += 1
@@ -107,7 +117,7 @@ endfunction
 function! vimwiki_tasks#parse_task(line, defaults)
     let l:task = vimwiki_tasks#empty_task()
     " create the task
-    let l:match = matchlist(a:line, '\v\* \[[^X]\]\s+(.*)\s*')
+    let l:match = matchlist(a:line, '\v\* \[.\]\s+(.*)\s*')
     let l:task.description = l:match[1]
     " construct the task creation command and create
     let l:task.task_cmd = 'task'
