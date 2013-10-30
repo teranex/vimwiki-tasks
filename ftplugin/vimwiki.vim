@@ -1,5 +1,9 @@
 
-execute "autocmd BufWrite ".expand('%:p')." call vimwiki_tasks#write()"
+augroup vimwiki_tasks
+    " when saving the file sync the tasks from vimwiki to TW
+    autocmd!
+    execute "autocmd BufWrite *.".expand('%:e')." call vimwiki_tasks#write()"
+augroup END
 
-" sync the contact of the file with TW
+" sync the tasks from TW to vimwiki
 call vimwiki_tasks#read()
