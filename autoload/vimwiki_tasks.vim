@@ -1,8 +1,4 @@
-" TODO: how to handle deleted tasks?
-" TODO: hide the uuid's
-" TODO: add utility task_notifier scripts
-" TODO: `:InsertTask <ID>` command
-" TODO: tags are removed from vimwiki after sync, add all tags into tasks?
+" TODO: when writing, the open_tasks should be refilled
 
 " a list of open tasks which should be checked to see if they are completed when the file is written
 let b:open_tasks = []
@@ -32,7 +28,7 @@ function! vimwiki_tasks#write()
                 let l:tw_task = vimwiki_tasks#load_task(l:task.uuid)
                 " XXX: tags are not updated
                 if l:task.description !=# l:tw_task.description || l:task.due !=# l:tw_task.due || l:task.project !=# l:defaults.project
-                    call <SID>System(l:task.task_cmd.' uuid:'.l:task.uuid.' modify '.shellescape(l:task.description).' '.l:task.task_meta)
+                    call <SID>System(l:task.task_cmd.' rc.confirmation=no uuid:'.l:task.uuid.' modify '.shellescape(l:task.description).' '.l:task.task_meta)
                 endif
             endif
         " check if the line is a closed task which was still open when reading the file
@@ -44,6 +40,8 @@ function! vimwiki_tasks#write()
         endif
         let l:i += 1
     endwhile
+    " do a new read to sync with TW and to refresh the b:open_tasks list
+    call vimwiki_tasks#read()
 endfunction
 
 function! vimwiki_tasks#read()
