@@ -1,5 +1,3 @@
-" TODO: when writing, the open_tasks should be refilled
-
 " a list of open tasks which should be checked to see if they are completed when the file is written
 let b:open_tasks = []
 
@@ -16,13 +14,15 @@ function! vimwiki_tasks#write()
                 call <SID>System(l:task.task_cmd.' add '.shellescape(l:task.description).' '.l:task.tags.' '.l:task.task_meta)
                 " find the id and the uuid of the newly created task
                 let l:id = substitute(<SID>System("task newest limit:1 rc.verbose=nothing rc.color=off rc.defaultwidth=999 rc.report.newest.columns=id rc.report.newest.labels=ID"), "\n", "", "")
-                " TODO: check for valid id and successful task creation before continuing?
                 let l:uuid = substitute(<SID>System("task ".l:id." uuid"), "\n", "", "")
                 " add the uuid to the line and remove the #TW indicator
                 call setline(l:i, <SID>RemoveTwIndicator(l:line)." #".l:uuid)
-                " annotate the task to reference the vimwiki file
-                let l:cmd = 'task '.l:id.' annotate vimwiki:'.expand('%:p')
-                call <SID>System(l:cmd)
+
+                if vimwiki_tasks#config('annotate_origin', 0)
+                    " annotate the task to reference the vimwiki file
+                    let l:cmd = 'task '.l:id.' annotate vimwiki:'.expand('%:p')
+                    call <SID>System(l:cmd)
+                endif
             " see if we need to update the task in TW
             else
                 let l:tw_task = vimwiki_tasks#load_task(l:task.uuid)
