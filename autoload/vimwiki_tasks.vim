@@ -2,6 +2,7 @@
 let b:open_tasks = []
 
 function! vimwiki_tasks#write()
+    call vimwiki_tasks#verify_taskwarrior()
     let l:defaults = vimwiki_tasks#get_defaults()
     let l:i = 1
     while l:i <= line('$')
@@ -45,6 +46,7 @@ function! vimwiki_tasks#write()
 endfunction
 
 function! vimwiki_tasks#read()
+    call vimwiki_tasks#verify_taskwarrior()
     let b:open_tasks = []
     let l:defaults = vimwiki_tasks#get_defaults()
     let l:i = 1
@@ -203,4 +205,10 @@ function! vimwiki_tasks#config(key, default)
         return g:vimwiki_tasks_tmp
     endif
     return a:default
+endfunction
+
+function! vimwiki_tasks#verify_taskwarrior()
+    if !executable('task')
+        throw "`task` not found or not executable"
+    endif
 endfunction
