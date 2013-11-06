@@ -58,7 +58,14 @@ function! vimwiki_tasks#read()
         if match(l:line, '\v\* \[[^X]\].*#[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}') != -1
             let l:task = vimwiki_tasks#parse_task(l:line, l:defaults)
             let l:tw_task = vimwiki_tasks#load_task(l:task.uuid)
-            if l:tw_task.status ==# 'Completed'
+            if l:tw_task.error != ''
+                " task has errors. Notify if not already done before
+                if match(l:line, l:tw_task.error) == -1
+                    call setline(l:i, l:line.' '.l:tw_task.error)
+                    echoerr "Task not found in taskwarrior: ".l:line
+                    let &mod = 1
+                endif
+            elseif l:tw_task.status ==# 'Completed'
                 call setline(l:i, vimwiki_tasks#build_task(l:line, l:tw_task, l:task, 1))
                 let &mod = 1
             elseif l:tw_task.status ==# 'Deleted'
@@ -206,7 +213,11 @@ function! vimwiki_tasks#load_task(uuid)
         let l:match = matchlist(l:result_line, '\v(\w+)\s+(.*)')
         let l:task[tolower(l:match[1])] = l:match[2]
     endfor
-
+    " check for any errors
+    if l:task.uuid == ''
+        let l:task.error = 'TASK_NOT_FOUND'
+    endif
+    " split the tags
     let l:task.tags_list = <SID>SplitTags(l:task.tags)
     return l:task
 endfunction
@@ -278,7 +289,7 @@ function! s:System(cmd)
 endfunction
 
 function! vimwiki_tasks#empty_task()
-    return {'id': 0, 'description': '', 'due': '', 'status': '', 'project': '', 'tags': '', 'tags_list': [], 'tags_default': []}
+    return {'id': 0, 'uuid': '', 'description': '', 'due': '', 'status': '', 'project': '', 'tags': '', 'tags_list': [], 'tags_default': [], 'error': ''}
 endfunction
 
 function! vimwiki_tasks#config(key, default)
