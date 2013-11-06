@@ -1,3 +1,5 @@
+" XXX: tags are not yet removed from TW
+"
 " a list of open tasks which should be checked to see if they are completed when the file is written
 let b:open_tasks = []
 
@@ -12,7 +14,7 @@ function! vimwiki_tasks#write()
             let l:task = vimwiki_tasks#parse_task(l:line, l:defaults)
             " add the task if it does not have a uuid
             if l:task.uuid == ""
-                call <SID>System(l:task.task_cmd.' add '.shellescape(l:task.description).' '.l:task.tags.' '.l:task.task_meta)
+                call <SID>System(l:task.task_cmd.' add '.shellescape(l:task.description).' '.<SID>JoinTags(l:task.tags_list).' '.l:task.task_meta)
                 " find the id and the uuid of the newly created task
                 let l:id = substitute(<SID>System("task newest limit:1 rc.verbose=nothing rc.color=off rc.defaultwidth=999 rc.report.newest.columns=id rc.report.newest.labels=ID"), "\n", "", "")
                 let l:uuid = substitute(<SID>System("task ".l:id." uuid"), "\n", "", "")
@@ -27,9 +29,8 @@ function! vimwiki_tasks#write()
             " see if we need to update the task in TW
             else
                 let l:tw_task = vimwiki_tasks#load_task(l:task.uuid)
-                " XXX: tags are not updated
-                if l:task.description !=# l:tw_task.description || l:task.due !=# l:tw_task.due || l:task.project !=# l:defaults.project
-                    call <SID>System(l:task.task_cmd.' rc.confirmation=no uuid:'.l:task.uuid.' modify '.shellescape(l:task.description).' '.l:task.task_meta)
+                if l:task.description !=# l:tw_task.description || l:task.due !=# l:tw_task.due || l:task.project !=# l:defaults.project || <SID>JoinTags(l:task.tags_list) !=# <SID>JoinTags(l:tw_task.tags_list)
+                    call <SID>System(l:task.task_cmd.' rc.confirmation=no uuid:'.l:task.uuid.' modify '.shellescape(l:task.description).' '.<SID>JoinTags(l:task.tags_list).' '.l:task.task_meta)
                 endif
             endif
         " check if the line is a closed task which was still open when reading the file
@@ -57,15 +58,15 @@ function! vimwiki_tasks#read()
             let l:task = vimwiki_tasks#parse_task(l:line, l:defaults)
             let l:tw_task = vimwiki_tasks#load_task(l:task.uuid)
             if l:tw_task.status ==# 'Completed'
-                call setline(l:i, vimwiki_tasks#build_task(l:line, l:tw_task, 1))
+                call setline(l:i, vimwiki_tasks#build_task(l:line, l:tw_task, l:task, 1))
                 let &mod = 1
             elseif l:tw_task.status ==# 'Deleted'
                 " TODO: handle deleted task (remove the uuid from the line?)
             else
                 " task is still open in TW, see if it was updated
-                if l:task.description !=# l:tw_task.description || l:task.due !=# l:tw_task.due
+                if l:task.description !=# l:tw_task.description || l:task.due !=# l:tw_task.due || <SID>JoinTags(l:task.tags_list) !=# <SID>JoinTags(l:tw_task.tags_list)
                     " and replace it in the file
-                    call setline(l:i, vimwiki_tasks#build_task(l:line, l:tw_task))
+                    call setline(l:i, vimwiki_tasks#build_task(l:line, l:tw_task, l:task))
                     " mark the buffer as modified
                     let &mod = 1
                 endif
@@ -78,7 +79,7 @@ function! vimwiki_tasks#read()
 endfunction
 
 function! vimwiki_tasks#get_defaults()
-    let l:defaults = {'project': '', 'tags': ''}
+    let l:defaults = {'project': '', 'tags_list': []}
     let l:i = 1
     while l:i <= 10
         let l:line = getline(l:i)
@@ -88,7 +89,7 @@ function! vimwiki_tasks#get_defaults()
         endif
         let l:tags = matchstr(l:line, '\v\%\%\s*Tags:\s*\zs(.+)\s*$')
         if l:tags != ""
-            let l:defaults.tags = l:tags
+            let l:defaults.tags_list = <SID>SplitTags(l:tags)
         endif
         let l:i +=1
     endwhile
@@ -97,7 +98,7 @@ endfunction
 
 " a:1 boolean, 1 if the task should be marked as finished, otherwise the state
 "              is reused from the task text
-function! vimwiki_tasks#build_task(line, tw_task, ...)
+function! vimwiki_tasks#build_task(line, tw_task, task, ...)
     " build the new task line
     let l:match = matchlist(a:line, '\v^(\s*)\* \[(.)\]')
     let l:indent = l:match[1]
@@ -106,12 +107,25 @@ function! vimwiki_tasks#build_task(line, tw_task, ...)
         let l:state = 'X'
     endif
     let l:newline = l:indent."* [".l:state."] ".a:tw_task.description
+    if len(a:tw_task.tags_list) > 0
+        " filter the default tags out so they are not added to the line
+        let l:tags = copy(a:tw_task.tags_list)
+        call filter(l:tags, "!<SID>HasItem(a:task.tags_default, v:val)")
+        " if there are still tags left, add them to the line
+        if len(l:tags) > 0
+            let l:newline .= ' '.<SID>JoinTags(l:tags)
+        endif
+    endif
     if a:tw_task.due != ""
         let l:due_printable = substitute(a:tw_task.due, 'T', " ", "")
         let l:newline .= " (".l:due_printable.")"
     endif
     let l:newline .= " #".a:tw_task.uuid
     return l:newline
+endfunction
+
+function s:HasItem(list, item)
+    return index(a:list, a:item) != -1
 endfunction
 
 function! vimwiki_tasks#parse_task(line, defaults)
@@ -148,19 +162,31 @@ function! vimwiki_tasks#parse_task(line, defaults)
         let l:task.description = substitute(l:task.description, '\v#[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}', "", "")
     endif
 
-    " add default tags
-    if has_key(a:defaults, 'tags')
-        let l:task.tags = a:defaults.tags
-    endif
+    " Parse the normal tags from the description
+    call extend(l:task.tags_list, <SID>ParseTags(l:task.description))
+    " and remove the tags from the description
+    let l:task.description = <SID>StripTags(l:task.description)
+
+    " Parse the default tags. Add them to the tags_list, but also add them to
+    " the tags_default list so we can keep track of which tags where added
+    " automatically (= should not end up in the vimwiki-line)
+    call extend(l:task.tags_list, a:defaults.tags_list)
+    call extend(l:task.tags_default, a:defaults.tags_list)
+    " add the tags specific for the type of task
+    let l:default_tags_key = ''
     if l:task.due == ""
-        let l:task.tags .= ' '.vimwiki_tasks#config('tags_nodue', '')
+        let l:default_tags_key = 'tags_nodue'
     else
         if get(l:due, 3, '') != ""
-            let l:task.tags .= ' '.vimwiki_tasks#config('tags_duetime', '')
+            let l:default_tags_key = 'tags_duetime'
         else
             let l:task.tags .= ' '.vimwiki_tasks#config('tags_duedate', '')
+            let l:default_tags_key = 'tags_duedate'
         endif
     endif
+    let l:task_tags = <SID>SplitTags(vimwiki_tasks#config(l:default_tags_key, ''))
+    call extend(l:task.tags_list, l:task_tags)
+    call extend(l:task.tags_default, l:task_tags)
 
     " remove any #TW at the end (= a new task without a due)
     let l:task.description = <SID>RemoveTwIndicator(l:task.description)
@@ -173,12 +199,14 @@ endfunction
 
 function! vimwiki_tasks#load_task(uuid)
     let l:task = vimwiki_tasks#empty_task()
-    let l:cmd = 'task rc.verbose=nothing rc.defaultwidth=999 rc.dateformat.info=Y-M-DTH:N rc.color=off uuid:'.a:uuid.' info | grep "^\(ID\|UUID\|Description\|Status\|Due\|Project\)"'
+    let l:cmd = 'task rc.verbose=nothing rc.defaultwidth=999 rc.dateformat.info=Y-M-DTH:N rc.color=off uuid:'.a:uuid.' info | grep "^\(ID\|UUID\|Description\|Status\|Due\|Project\|Tags\)"'
     let l:result = split(<SID>System(l:cmd), '\n')
     for l:result_line in l:result
         let l:match = matchlist(l:result_line, '\v(\w+)\s+(.*)')
         let l:task[tolower(l:match[1])] = l:match[2]
     endfor
+
+    let l:task.tags_list = <SID>SplitTags(l:task.tags)
     return l:task
 endfunction
 
@@ -190,13 +218,54 @@ function! s:RemoveTwIndicator(input)
     return substitute(a:input, '\v\s?#TW\s*$', "", "")
 endfunction
 
+function! s:SplitTags(tagstr)
+    let l:tags = split(a:tagstr, '\v\s+')
+    let l:i = 0
+    while l:i < len(l:tags)
+        if match(l:tags[l:i], '\v^\+') == -1
+            let l:tags[l:i] = '+'.l:tags[l:i]
+        endif
+        let l:i += 1
+    endwhile
+    return l:tags
+endfunction
+
+function! s:ParseTags(str)
+    let l:tags = []
+    let l:i = 1
+    while l:i != -1
+        let l:tag = matchstr(a:str, '\v(\+\w+)', 0, l:i)
+        if l:tag == ''
+            let l:i = -1
+        else
+            call add(l:tags, l:tag)
+            let l:i += 1
+        endif
+    endwhile
+    return l:tags
+endfunction
+
+function! s:StripTags(str)
+    " strip tags
+    let l:str = substitute(a:str, '\v\+\w+', '', 'g')
+    " strip multiple spaces
+    let l:str = substitute(l:str, '\v\s+', ' ', 'g')
+    " strip spaces
+    return <SID>Strip(l:str)
+endfunction
+
+function! s:JoinTags(taglist)
+    call sort(a:taglist)
+    return join(a:taglist, ' ')
+endfunction
+
 function! s:System(cmd)
     " echom a:cmd
     return system(a:cmd)
 endfunction
 
 function! vimwiki_tasks#empty_task()
-    return {'id': 0, 'description': '', 'due': '', 'status': '', 'project': '', 'tags': ''}
+    return {'id': 0, 'description': '', 'due': '', 'status': '', 'project': '', 'tags_list': [], 'tags_default': []}
 endfunction
 
 function! vimwiki_tasks#config(key, default)
