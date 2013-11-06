@@ -1,5 +1,3 @@
-" XXX: tags are not yet removed from TW
-"
 " a list of open tasks which should be checked to see if they are completed when the file is written
 let b:open_tasks = []
 
@@ -30,7 +28,10 @@ function! vimwiki_tasks#write()
             else
                 let l:tw_task = vimwiki_tasks#load_task(l:task.uuid)
                 if l:task.description !=# l:tw_task.description || l:task.due !=# l:tw_task.due || l:task.project !=# l:defaults.project || <SID>JoinTags(l:task.tags_list) !=# <SID>JoinTags(l:tw_task.tags_list)
-                    call <SID>System(l:task.task_cmd.' rc.confirmation=no uuid:'.l:task.uuid.' modify '.shellescape(l:task.description).' '.<SID>JoinTags(l:task.tags_list).' '.l:task.task_meta)
+                    call <SID>System(l:task.task_cmd.' rc.confirmation=no uuid:'.l:task.uuid.
+                                     \ ' modify '.shellescape(l:task.description).' '.
+                                     \ <SID>JoinTags(l:task.tags_list).' '.<SID>TagsToRemove(l:tw_task.tags_list, l:task.tags_list).
+                                     \ ' '.l:task.task_meta)
                 endif
             endif
         " check if the line is a closed task which was still open when reading the file
@@ -259,13 +260,25 @@ function! s:JoinTags(taglist)
     return join(a:taglist, ' ')
 endfunction
 
+function! s:TagsToRemove(old_tags, new_tags)
+    let l:remove = []
+    for l:tag in a:old_tags
+        if index(a:new_tags, l:tag) == -1
+            call add(l:remove, l:tag)
+        endif
+    endfor
+    let l:remove_str = <SID>JoinTags(l:remove)
+    " replace the + sign by a - sign so the tags are removed by TW
+    return substitute(l:remove_str, '\v\+', '-', 'g')
+endfunction
+
 function! s:System(cmd)
     " echom a:cmd
     return system(a:cmd)
 endfunction
 
 function! vimwiki_tasks#empty_task()
-    return {'id': 0, 'description': '', 'due': '', 'status': '', 'project': '', 'tags_list': [], 'tags_default': []}
+    return {'id': 0, 'description': '', 'due': '', 'status': '', 'project': '', 'tags': '', 'tags_list': [], 'tags_default': []}
 endfunction
 
 function! vimwiki_tasks#config(key, default)
