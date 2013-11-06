@@ -27,11 +27,14 @@ function! vimwiki_tasks#write()
             " see if we need to update the task in TW
             else
                 let l:tw_task = vimwiki_tasks#load_task(l:task.uuid)
-                if l:task.description !=# l:tw_task.description || l:task.due !=# l:tw_task.due || l:task.project !=# l:defaults.project || <SID>JoinTags(l:task.tags_list) !=# <SID>JoinTags(l:tw_task.tags_list)
-                    call <SID>System(l:task.task_cmd.' rc.confirmation=no uuid:'.l:task.uuid.
-                                     \ ' modify '.shellescape(l:task.description).' '.
-                                     \ <SID>JoinTags(l:task.tags_list).' '.<SID>TagsToRemove(l:tw_task.tags_list, l:task.tags_list).
-                                     \ ' '.l:task.task_meta)
+                " don't update deleted tasks
+                if l:tw_task.status !=# 'Deleted'
+                    if l:task.description !=# l:tw_task.description || l:task.due !=# l:tw_task.due || l:task.project !=# l:defaults.project || <SID>JoinTags(l:task.tags_list) !=# <SID>JoinTags(l:tw_task.tags_list)
+                        call <SID>System(l:task.task_cmd.' rc.confirmation=no uuid:'.l:task.uuid.
+                                        \ ' modify '.shellescape(l:task.description).' '.
+                                        \ <SID>JoinTags(l:task.tags_list).' '.<SID>TagsToRemove(l:tw_task.tags_list, l:task.tags_list).
+                                        \ ' '.l:task.task_meta)
+                    endif
                 endif
             endif
         " check if the line is a closed task which was still open when reading the file
@@ -62,14 +65,14 @@ function! vimwiki_tasks#read()
                 " task has errors. Notify if not already done before
                 if match(l:line, l:tw_task.error) == -1
                     call setline(l:i, l:line.' '.l:tw_task.error)
-                    echoerr "Task not found in taskwarrior: ".l:line
+                    echoerr <SID>ErrorMsg(l:tw_task.error).": ".l:line
                     let &mod = 1
                 endif
             elseif l:tw_task.status ==# 'Completed'
                 call setline(l:i, vimwiki_tasks#build_task(l:line, l:tw_task, l:task, 1))
                 let &mod = 1
             elseif l:tw_task.status ==# 'Deleted'
-                " TODO: handle deleted task (remove the uuid from the line?)
+                " Deleted is already handled above as being an error
             else
                 " task is still open in TW, see if it was updated
                 if l:task.description !=# l:tw_task.description || l:task.due !=# l:tw_task.due || <SID>JoinTags(l:task.tags_list) !=# <SID>JoinTags(l:tw_task.tags_list)
@@ -216,7 +219,10 @@ function! vimwiki_tasks#load_task(uuid)
     " check for any errors
     if l:task.uuid == ''
         let l:task.error = 'TASK_NOT_FOUND'
+    elseif l:task.status ==# 'Deleted'
+        let l:task.error = 'TASK_DELETED'
     endif
+
     " split the tags
     let l:task.tags_list = <SID>SplitTags(l:task.tags)
     return l:task
@@ -286,6 +292,15 @@ endfunction
 function! s:System(cmd)
     " echom a:cmd
     return system(a:cmd)
+endfunction
+
+function! s:ErrorMsg(error)
+    if a:error ==# 'TASK_DELETED'
+        return 'Task was deleted in taskwarrior'
+    elseif a:error ==# 'TASK_NOT_FOUND'
+        return 'Task was not found in taskwarrior'
+    endif
+    return 'Unknown error'
 endfunction
 
 function! vimwiki_tasks#empty_task()
