@@ -309,8 +309,7 @@ endfunction
 
 function! vimwiki_tasks#config(key, default)
     if exists('g:vimwiki_tasks_'.a:key)
-        execute "let g:vimwiki_tasks_tmp = g:vimwiki_tasks_".a:key
-        return g:vimwiki_tasks_tmp
+        return g:vimwiki_tasks_{a:key}
     endif
     return a:default
 endfunction
