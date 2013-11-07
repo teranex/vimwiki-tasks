@@ -12,17 +12,16 @@ function! vimwiki_tasks#write()
             let l:task = vimwiki_tasks#parse_task(l:line, l:defaults)
             " add the task if it does not have a uuid
             if l:task.uuid == ""
-                call <SID>System(l:task.task_cmd.' add '.shellescape(l:task.description).' '.<SID>JoinTags(l:task.tags_list).' '.l:task.task_meta)
+                call <SID>Task(l:task.task_args.' add '.shellescape(l:task.description).' '.<SID>JoinTags(l:task.tags_list).' '.l:task.task_meta)
                 " find the id and the uuid of the newly created task
-                let l:id = substitute(<SID>System("task newest limit:1 rc.verbose=nothing rc.color=off rc.defaultwidth=999 rc.report.newest.columns=id rc.report.newest.labels=ID"), "\n", "", "")
-                let l:uuid = substitute(<SID>System("task ".l:id." uuid"), "\n", "", "")
+                let l:id = substitute(<SID>Task("newest limit:1 rc.verbose=nothing rc.color=off rc.defaultwidth=999 rc.report.newest.columns=id rc.report.newest.labels=ID"), "\n", "", "")
+                let l:uuid = substitute(<SID>Task(l:id." uuid"), "\n", "", "")
                 " add the uuid to the line and remove the #TW indicator
                 call setline(l:i, <SID>RemoveTwIndicator(l:line)." #".l:uuid)
 
                 if vimwiki_tasks#config('annotate_origin', 0)
                     " annotate the task to reference the vimwiki file
-                    let l:cmd = 'task '.l:id.' annotate vimwiki:'.expand('%:p')
-                    call <SID>System(l:cmd)
+                    call <SID>Task(l:id.' annotate vimwiki:'.expand('%:p'))
                 endif
             " see if we need to update the task in TW
             else
@@ -30,7 +29,7 @@ function! vimwiki_tasks#write()
                 " don't update deleted tasks
                 if l:tw_task.status !=# 'Deleted'
                     if l:task.description !=# l:tw_task.description || l:task.due !=# l:tw_task.due || l:task.project !=# l:defaults.project || <SID>JoinTags(l:task.tags_list) !=# <SID>JoinTags(l:tw_task.tags_list)
-                        call <SID>System(l:task.task_cmd.' rc.confirmation=no uuid:'.l:task.uuid.
+                        call <SID>Task(l:task.task_args.' rc.confirmation=no uuid:'.l:task.uuid.
                                         \ ' modify '.shellescape(l:task.description).' '.
                                         \ <SID>JoinTags(l:task.tags_list).' '.<SID>TagsToRemove(l:tw_task.tags_list, l:task.tags_list).
                                         \ ' '.l:task.task_meta)
@@ -41,7 +40,7 @@ function! vimwiki_tasks#write()
         elseif match(l:line, '\v\* \[X\].*#[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}') != -1
             let l:task = vimwiki_tasks#parse_task(l:line, l:defaults)
             if index(b:open_tasks, l:task.uuid) >= 0
-                call <SID>System('task uuid:'.l:task.uuid.' done')
+                call <SID>Task('uuid:'.l:task.uuid.' done')
             endif
         endif
         let l:i += 1
@@ -145,7 +144,7 @@ function! vimwiki_tasks#parse_task(line, defaults)
     let l:match = matchlist(a:line, '\v\* \[.\]\s+(.*)\s*')
     let l:task.description = l:match[1]
     " construct the task creation command and create
-    let l:task.task_cmd = 'task'
+    let l:task.task_args = ''
     let l:task.task_meta = ''
     " add a project if necessary
     if has_key(a:defaults, 'project')
@@ -164,8 +163,8 @@ function! vimwiki_tasks#parse_task(line, defaults)
         " set the due in task_meta
         let l:task.due = l:task.due_date.'T'.l:task.due_time
         let l:task.task_meta .= ' due:'.l:task.due
-        " set the dateformat in task_cmd
-        let l:task.task_cmd .= ' rc.dateformat=Y-M-DTH:N'
+        " set the dateformat in task_args
+        let l:task.task_args .= ' rc.dateformat=Y-M-DTH:N'
     endif
     " get the uuid from the task if it is there, and remove it from the task description
     let l:task.uuid = matchstr(a:line, '\v#\zs([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})')
@@ -210,8 +209,8 @@ endfunction
 
 function! vimwiki_tasks#load_task(uuid)
     let l:task = vimwiki_tasks#empty_task()
-    let l:cmd = 'task rc.verbose=nothing rc.defaultwidth=999 rc.dateformat.info=Y-M-DTH:N rc.color=off uuid:'.a:uuid.' info | grep "^\(ID\|UUID\|Description\|Status\|Due\|Project\|Tags\)"'
-    let l:result = split(<SID>System(l:cmd), '\n')
+    let l:cmd = 'rc.verbose=nothing rc.defaultwidth=999 rc.dateformat.info=Y-M-DTH:N rc.color=off uuid:'.a:uuid.' info | grep "^\(ID\|UUID\|Description\|Status\|Due\|Project\|Tags\)"'
+    let l:result = split(<SID>Task(l:cmd), '\n')
     for l:result_line in l:result
         let l:match = matchlist(l:result_line, '\v(\w+)\s+(.*)')
         let l:task[tolower(l:match[1])] = l:match[2]
@@ -292,6 +291,11 @@ endfunction
 function! s:System(cmd)
     " echom a:cmd
     return system(a:cmd)
+endfunction
+
+function! s:Task(args)
+    " execute task with the given args + any optional args specified by the user
+    return system('task '.vimwiki_tasks#config('task_args', '').' '.a:args)
 endfunction
 
 function! s:ErrorMsg(error)
