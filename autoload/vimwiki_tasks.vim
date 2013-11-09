@@ -323,3 +323,18 @@ function! vimwiki_tasks#verify_taskwarrior()
         throw "`task` not found or not executable"
     endif
 endfunction
+
+function! vimwiki_tasks#display_task_id(copy_to_clipboard)
+    let l:uuid = matchstr(getline(line('.')), '\v\* \[.\].*#\zs[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}')
+    if l:uuid != ''
+        let l:tw_task = vimwiki_tasks#load_task(l:uuid)
+        let l:msg = "Task ID: ".l:tw_task.id
+        if (a:copy_to_clipboard)
+            let @+ = l:tw_task.id
+            let l:msg .= ", copied to clipboard"
+        endif
+        echo l:msg
+    else
+        echo "Could not find a task on this line!"
+    endif
+endfunction

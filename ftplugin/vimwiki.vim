@@ -7,4 +7,7 @@ if vimwiki_tasks#config('taskwarrior_integration', 1)
 
     " sync the tasks from TW to vimwiki
     call vimwiki_tasks#read()
+
+    command! DisplayTaskID call vimwiki_tasks#display_task_id(0)
+    command! CopyTaskID call vimwiki_tasks#display_task_id(1)
 endif
