@@ -352,3 +352,24 @@ function! vimwiki_tasks#display_task_uuid(copy_to_clipboard)
         echo "Could not find a task on this line!"
     endif
 endfunction
+
+function! vimwiki_tasks#insert_tasks(filter)
+    echo "Loading tasks..."
+    redraw
+    let l:report = vimwiki_tasks#config('report', 'all')
+    let l:cmd = l:report
+    let l:cmd .= ' rc.report.'.l:report.'.columns=uuid rc.report.'.l:report.'.labels=UUID rc.verbose=nothing '
+    let l:cmd .= a:filter
+    let l:uuids = split(<SID>Task(l:cmd), '\n')
+    let l:empty_task = vimwiki_tasks#empty_task()
+    let l:lines = []
+    for l:uuid in l:uuids
+        let l:tw_task = vimwiki_tasks#load_task(l:uuid)
+        let l:line = vimwiki_tasks#build_task('* [ ]', l:tw_task, l:empty_task, l:tw_task.status == 'Completed')
+        call add(l:lines, l:line)
+    endfor
+    if len(l:lines) > 0
+        call append(line('.'), l:lines)
+    endif
+    echo "Inserted ".len(l:lines)." task(s)"
+endfunction
