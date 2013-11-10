@@ -386,6 +386,11 @@ function! vimwiki_tasks#insert_tasks(filter, bang)
     endfor
     if len(l:lines) > 0
         call append(line('.'), l:lines)
+        " fix the indent of the new lines
+        exec "normal! ".(len(l:lines)+1)."=="
+        redraw " get rid of the 'XX lines indented' message
+        " and set the '[ to the first new line
+        normal jm[
     endif
     echo "Inserted ".len(l:lines)." task(s)"
 endfunction
