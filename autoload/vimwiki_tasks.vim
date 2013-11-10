@@ -338,3 +338,17 @@ function! vimwiki_tasks#display_task_id(copy_to_clipboard)
         echo "Could not find a task on this line!"
     endif
 endfunction
+
+function! vimwiki_tasks#display_task_uuid(copy_to_clipboard)
+    let l:uuid = matchstr(getline(line('.')), '\v\* \[.\].*#\zs[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}')
+    if l:uuid != ''
+        let l:msg = "Task UUID: ".l:uuid
+        if (a:copy_to_clipboard)
+            let @+ = l:uuid
+            let l:msg .= ", copied to clipboard"
+        endif
+        echo l:msg
+    else
+        echo "Could not find a task on this line!"
+    endif
+endfunction
