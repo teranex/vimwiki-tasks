@@ -343,7 +343,7 @@ function! vimwiki_tasks#display_task_uuid(copy_to_clipboard)
     let l:uuid = matchstr(getline(line('.')), '\v\* \[.\].*#\zs[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}')
     if l:uuid != ''
         let l:msg = "Task UUID: ".l:uuid
-        if (a:copy_to_clipboard)
+        if a:copy_to_clipboard
             let @+ = l:uuid
             let l:msg .= ", copied to clipboard"
         endif
@@ -353,7 +353,20 @@ function! vimwiki_tasks#display_task_uuid(copy_to_clipboard)
     endif
 endfunction
 
-function! vimwiki_tasks#insert_tasks(filter)
+function! s:UuidsInBuffer()
+    let l:i = 1
+    let l:uuids = []
+    while l:i <= line('$')
+        let l:uuid = matchstr(getline(l:i), '\v\* \[.\].*#\zs[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}')
+        if l:uuid != ''
+            call add(l:uuids, l:uuid)
+        endif
+        let l:i += 1
+    endwhile
+    return l:uuids
+endfunction
+
+function! vimwiki_tasks#insert_tasks(filter, bang)
     echo "Loading tasks..."
     redraw
     let l:report = vimwiki_tasks#config('report', 'all')
@@ -363,10 +376,13 @@ function! vimwiki_tasks#insert_tasks(filter)
     let l:uuids = split(<SID>Task(l:cmd), '\n')
     let l:empty_task = vimwiki_tasks#empty_task()
     let l:lines = []
+    let l:uuids_in_buffer = <SID>UuidsInBuffer()
     for l:uuid in l:uuids
-        let l:tw_task = vimwiki_tasks#load_task(l:uuid)
-        let l:line = vimwiki_tasks#build_task('* [ ]', l:tw_task, l:empty_task, l:tw_task.status == 'Completed')
-        call add(l:lines, l:line)
+        if a:bang == '!' || index(l:uuids_in_buffer, l:uuid) == -1
+            let l:tw_task = vimwiki_tasks#load_task(l:uuid)
+            let l:line = vimwiki_tasks#build_task('* [ ]', l:tw_task, l:empty_task, l:tw_task.status == 'Completed')
+            call add(l:lines, l:line)
+        endif
     endfor
     if len(l:lines) > 0
         call append(line('.'), l:lines)
