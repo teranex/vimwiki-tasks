@@ -394,3 +394,22 @@ function! vimwiki_tasks#insert_tasks(filter, bang)
     endif
     echo "Inserted ".len(l:lines)." task(s)"
 endfunction
+
+function! vimwiki_tasks#current_task_do(task_cmd)
+    let l:line = getline(line('.'))
+    let l:uuid = matchstr(l:line, '\v\* \[.\].*#\zs[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}')
+    if l:uuid != ''
+        let l:cmd = "!task ".vimwiki_tasks#config('task_args', '').l:uuid." ".a:task_cmd
+        if has("gui_running")
+            let l:cmd .= " rc.color=off rc.defaultwidth=".&columns
+        endif
+        execute l:cmd
+        " and rebuild the task as it might have changed
+        let l:tw_task = vimwiki_tasks#load_task(l:uuid)
+        let l:task = vimwiki_tasks#parse_task(l:line, vimwiki_tasks#get_defaults())
+        let l:new_line = vimwiki_tasks#build_task(l:line, l:tw_task, l:task, l:tw_task.status == 'Completed')
+        call setline('.', l:new_line)
+    else
+        echo "Could not find a task on this line!"
+    endif
+endfunction
