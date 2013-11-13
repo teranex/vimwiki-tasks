@@ -86,6 +86,9 @@ function! vimwiki_tasks#read()
         endif
         let l:i += 1
     endwhile
+    if vimwiki_tasks#config('update_tasklists', 1)
+        call vimwiki_tasks#update_task_lists()
+    endif
 endfunction
 
 function! vimwiki_tasks#get_defaults()
@@ -366,7 +369,11 @@ function! s:UuidsInBuffer()
     return l:uuids
 endfunction
 
-function! vimwiki_tasks#insert_tasks(filter, bang)
+" a:1 boolean, if 1 the tasklist filter will be inserted, otherwise not (not
+" that the config parameter is also taken into account, but it can be
+" overriden by setting a:1 to a value other than 1. This case is used during
+" the updating of the taskslists where the filter should not be inserted again
+function! vimwiki_tasks#insert_tasks(filter, bang, line, ...)
     echo "Loading tasks..."
     redraw
     let l:report = vimwiki_tasks#config('report', 'all')
@@ -384,8 +391,16 @@ function! vimwiki_tasks#insert_tasks(filter, bang)
             call add(l:lines, l:line)
         endif
     endfor
+    let l:num_added = 0
     if len(l:lines) > 0
-        call append(line('.'), l:lines)
+        " XXX: check if current line is empty and replace it, otherwise
+        " append?
+        if vimwiki_tasks#config('include_tasklist', 1) && (a:0 == 0 || a:0 > 0 && a:1 == 1)
+            let l:num_added += 1
+            " TODO: add correct indent?
+            call append(a:line, '%% TaskList: '.a:filter)
+        endif
+        call append(a:line + l:num_added, l:lines)
         " fix the indent of the new lines
         exec "normal! ".(len(l:lines)+1)."=="
         redraw " get rid of the 'XX lines indented' message
@@ -393,6 +408,7 @@ function! vimwiki_tasks#insert_tasks(filter, bang)
         normal jm[
     endif
     echo "Inserted ".len(l:lines)." task(s)"
+    return len(l:lines) + l:num_added
 endfunction
 
 function! vimwiki_tasks#current_task_do(task_cmd)
@@ -412,4 +428,20 @@ function! vimwiki_tasks#current_task_do(task_cmd)
     else
         echo "Could not find a task on this line!"
     endif
+endfunction
+
+function! vimwiki_tasks#update_task_lists()
+    let l:i = 1
+    while l:i <= line('$')
+        let l:line = getline(l:i)
+        let l:tasklist = matchstr(l:line, '\v\%\%\s*TaskList:\s*\zs(.*$)')
+        if l:tasklist != ''
+            " ok we found a tasklist, try to add new tasks
+            let l:num_added = 0
+            let l:num_added += vimwiki_tasks#insert_tasks(l:tasklist, '', l:i, 0)
+            let l:i += l:num_added + 1
+        else
+            let l:i += 1
+        endif
+    endwhile
 endfunction
