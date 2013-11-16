@@ -1,5 +1,9 @@
-" a list of open tasks which should be checked to see if they are completed when the file is written
+" a list of open tasks which should be checked to see if they are completed
+" when the file is written
 let b:open_tasks = []
+" the date/time when the file was read. Used to compare with last_modified
+" date of tasks in taskwarrior, to avoid overwriting changes from taskwarrior
+let b:read_time = ''
 
 function! vimwiki_tasks#write()
     call vimwiki_tasks#verify_taskwarrior()
@@ -29,10 +33,16 @@ function! vimwiki_tasks#write()
                 " don't update deleted tasks
                 if l:tw_task.status !=# 'Deleted'
                     if l:task.description !=# l:tw_task.description || l:task.due !=# l:tw_task.due || l:task.project !=# l:defaults.project || <SID>JoinTags(l:task.tags_list) !=# <SID>JoinTags(l:tw_task.tags_list)
-                        call <SID>Task(l:task.task_args.' rc.confirmation=no uuid:'.l:task.uuid.
-                                        \ ' modify '.shellescape(l:task.description).' '.
-                                        \ <SID>JoinTags(l:task.tags_list).' '.<SID>TagsToRemove(l:tw_task.tags_list, l:task.tags_list).
-                                        \ ' '.l:task.task_meta)
+                        let l:continue = 1
+                        if l:tw_task.last_modified > b:read_time
+                            let l:continue =  confirm("The task was modified in taskwarrior after this file was opened. Which version do you want to keep?\nTaskwarrior: ".l:tw_task.description."\nVimwiki:     ".l:task.description, "&Taskwarrior\n&Vimwiki") > 1
+                        endif
+                        if l:continue
+                            call <SID>Task(l:task.task_args.' rc.confirmation=no uuid:'.l:task.uuid.
+                                            \ ' modify '.shellescape(l:task.description).' '.
+                                            \ <SID>JoinTags(l:task.tags_list).' '.<SID>TagsToRemove(l:tw_task.tags_list, l:task.tags_list).
+                                            \ ' '.l:task.task_meta)
+                        endif
                     endif
                 endif
             endif
@@ -51,6 +61,7 @@ endfunction
 
 function! vimwiki_tasks#read()
     call vimwiki_tasks#verify_taskwarrior()
+    let b:read_time = strftime("%Y-%m-%dT%H:%M")
     let b:open_tasks = []
     let l:defaults = vimwiki_tasks#get_defaults()
     let l:i = 1
@@ -130,7 +141,10 @@ function! vimwiki_tasks#build_task(line, tw_task, task, ...)
         endif
     endif
     if a:tw_task.due != ""
+        " change the T date/time separator into a space
         let l:due_printable = substitute(a:tw_task.due, 'T', " ", "")
+        " remove the seconds as we don't use them in Vimwiki
+        let l:due_printable = substitute(l:due_printable, '\v:00$', "", "")
         let l:newline .= " (".l:due_printable.")"
     endif
     let l:newline .= " #".a:tw_task.uuid
@@ -161,13 +175,15 @@ function! vimwiki_tasks#parse_task(line, defaults)
         if l:task.due_time == ""
             let l:task.due_time = '00:00'
         endif
+        " add seconds so we have the correct date/time format
+        let l:task.due_time .= ":00"
         " remove date in line
         let l:task.description = substitute(l:task.description, '\v\(\d{4}-\d\d-\d\d( \d\d:\d\d)?\)', "", "")
         " set the due in task_meta
         let l:task.due = l:task.due_date.'T'.l:task.due_time
         let l:task.task_meta .= ' due:'.l:task.due
         " set the dateformat in task_args
-        let l:task.task_args .= ' rc.dateformat=Y-M-DTH:N'
+        let l:task.task_args .= ' rc.dateformat=Y-M-DTH:N:S'
     endif
     " get the uuid from the task if it is there, and remove it from the task description
     let l:task.uuid = matchstr(a:line, '\v#\zs([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})')
@@ -212,11 +228,13 @@ endfunction
 
 function! vimwiki_tasks#load_task(uuid)
     let l:task = vimwiki_tasks#empty_task()
-    let l:cmd = 'rc.verbose=nothing rc.defaultwidth=999 rc.dateformat.info=Y-M-DTH:N rc.color=off uuid:'.a:uuid.' info | grep "^\(ID\|UUID\|Description\|Status\|Due\|Project\|Tags\)"'
+    let l:cmd = 'rc.verbose=nothing rc.defaultwidth=999 rc.dateformat.info=Y-M-DTH:N:S rc.color=off uuid:'
+                    \ .a:uuid.' info | grep "^\(ID\|UUID\|Description\|Status\|Due\|Project\|Tags\|Last modified\)"'
     let l:result = split(<SID>Task(l:cmd), '\n')
     for l:result_line in l:result
-        let l:match = matchlist(l:result_line, '\v(\w+)\s+(.*)')
-        let l:task[tolower(l:match[1])] = l:match[2]
+        let l:match = matchlist(l:result_line, '\v(Last modified|\w+)\s+(.*)')
+        let l:key = substitute(l:match[1], '\v\s+', '_', 'g')
+        let l:task[tolower(l:key)] = l:match[2]
     endfor
     " check for any errors
     if l:task.uuid == ''
@@ -224,7 +242,13 @@ function! vimwiki_tasks#load_task(uuid)
     elseif l:task.status ==# 'Deleted'
         let l:task.error = 'TASK_DELETED'
     endif
-
+    " get the correct modification date
+    if l:task.last_modified != -1
+        let l:datetime = matchstr(l:task.last_modified, '\v\S{19}')
+        if l:datetime != ''
+            let l:task.last_modified = l:datetime
+        endif
+    endif
     " split the tags
     let l:task.tags_list = <SID>SplitTags(l:task.tags)
     return l:task
@@ -311,7 +335,19 @@ function! s:ErrorMsg(error)
 endfunction
 
 function! vimwiki_tasks#empty_task()
-    return {'id': 0, 'uuid': '', 'description': '', 'due': '', 'status': '', 'project': '', 'tags': '', 'tags_list': [], 'tags_default': [], 'error': ''}
+    return {
+        \ 'id': 0,
+        \'uuid': '',
+        \ 'description': '',
+        \ 'due': '',
+        \ 'status': '',
+        \ 'project': '',
+        \ 'tags': '',
+        \ 'tags_list': [],
+        \ 'tags_default': [],
+        \ 'error': '',
+        \ 'last_modified': -1,
+    \ }
 endfunction
 
 function! vimwiki_tasks#config(key, default)
@@ -393,11 +429,9 @@ function! vimwiki_tasks#insert_tasks(filter, bang, line, ...)
     endfor
     let l:num_added = 0
     if len(l:lines) > 0
-        " XXX: check if current line is empty and replace it, otherwise
-        " append?
+        " XXX: check if current line is empty and replace it, otherwise append?
         if vimwiki_tasks#config('include_tasklist', 1) && (a:0 == 0 || a:0 > 0 && a:1 == 1)
             let l:num_added += 1
-            " TODO: add correct indent?
             call append(a:line, '%% TaskList: '.a:filter)
         endif
         call append(a:line + l:num_added, l:lines)
@@ -415,16 +449,20 @@ function! vimwiki_tasks#current_task_do(task_cmd)
     let l:line = getline(line('.'))
     let l:uuid = matchstr(l:line, '\v\* \[.\].*#\zs[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}')
     if l:uuid != ''
-        let l:cmd = "!task ".vimwiki_tasks#config('task_args', '').l:uuid." ".a:task_cmd
+        let l:tw_task_before = vimwiki_tasks#load_task(l:uuid)
+        let l:cmd = "!task ".vimwiki_tasks#config('task_args', '')." ".l:uuid." ".a:task_cmd
         if has("gui_running")
             let l:cmd .= " rc.color=off rc.defaultwidth=".&columns
         endif
         execute l:cmd
-        " and rebuild the task as it might have changed
+        " and rebuild the task if the last_modified has changed
         let l:tw_task = vimwiki_tasks#load_task(l:uuid)
-        let l:task = vimwiki_tasks#parse_task(l:line, vimwiki_tasks#get_defaults())
-        let l:new_line = vimwiki_tasks#build_task(l:line, l:tw_task, l:task, l:tw_task.status == 'Completed')
-        call setline('.', l:new_line)
+        if l:tw_task_before.last_modified != l:tw_task.last_modified
+            let l:task = vimwiki_tasks#parse_task(l:line, vimwiki_tasks#get_defaults())
+            let l:new_line = vimwiki_tasks#build_task(l:line, l:tw_task, l:task, l:tw_task.status == 'Completed')
+            call setline('.', l:new_line)
+            let &mod = 1
+        endif
     else
         echo "Could not find a task on this line!"
     endif
