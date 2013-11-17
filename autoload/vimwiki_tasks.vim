@@ -452,6 +452,8 @@ function! vimwiki_tasks#insert_tasks(filter, bang, line, ...)
     return len(l:lines) + l:num_added
 endfunction
 
+" TODO: make it also work on a tasknote file
+" TODO: add a `:TaskModify` command (with optional confirmation)
 function! vimwiki_tasks#current_task_do(task_cmd)
     " TODO: shellescape?
     let l:line = getline(line('.'))
@@ -493,10 +495,9 @@ function! vimwiki_tasks#update_task_lists()
 endfunction
 
 function! vimwiki_tasks#load_full_task(uuid)
-    " TODO: filter annotations in a separate list
-    let l:cmd = 'rc.verbose=labels rc.defaultwidth=999 rc.color=off uuid:'.a:uuid.' info'
+    let l:cmd = 'rc.verbose=labels rc.defaultwidth=999 rc.dateformat.info=Y-M-D\ H:N:S rc.color=off uuid:'.a:uuid.' info'
     let l:result = split(<SID>Task(l:cmd), '\n')
-    let l:task_details = {'details': [], 'annotations': []}
+    let l:task_details = {'details': [], 'annotations': [], 'description': '', 'last_modified': ''}
     if len(l:result) > 5 " for a valid task we will have at least 5 lines or so
         let l:i = 3
         " get the width of the labels, yes this is dirty but avoids having to
@@ -511,8 +512,16 @@ function! vimwiki_tasks#load_full_task(uuid)
                 let l:match = matchlist(l:result[l:i], '\v^(.{'.l:width.'})(.*)')
                 if match(l:match[1], '\v^\s+$') > -1
                     call add(l:task_details.annotations, '* '.<SID>Strip(l:match[2]))
-                elseif match(l:match[1], '\vDescription|UUID') == -1
+                elseif match(l:match[1], '\v^Description|UUID') == -1
                     call add(l:task_details.details, l:match[1].'::'.l:match[2])
+                endif
+                " store the description in a separate key
+                if match(l:match[1], '\v^Description') != -1
+                    let l:task_details.description = l:match[2]
+                endif
+                " store the last modified also in a separate key
+                if match(l:match[1], '\v^Last modified') != -1
+                    let l:task_details.last_modified = l:match[1].'::'.l:match[2]
                 endif
             endif
             let l:i += 1
@@ -535,25 +544,10 @@ function! vimwiki_tasks#open_tasknotes()
         execute "edit ".l:taskpath
         if glob(l:taskpath, 1) == ''
             " file does not yet exist on disk, fill the buffer with the initial content
-            call append(0, '%% TaskUUID: '.l:uuid)
-            " TODO: don't hardcode markdown syntax
-            call append(1, '')
-            call append(2, '# Task: '.l:tw_task.description)
-            call append(3, '## Task details')
-            let l:details = vimwiki_tasks#load_full_task(l:uuid)
-            let l:i = 4
-            for l:detail in l:details.details
-                call append(l:i, l:detail)
-                let l:i += 1
-            endfor
-            call append(1 + l:i, '## Annotations')
-            let l:i += 2
-            for l:annotation in l:details.annotations
-                call append(l:i, l:annotation)
-                let l:i += 1
-            endfor
-            call append(0 + l:i, '')
-            call append(1 + l:i, '## Notes')
+            call vimwiki_tasks#insert_task_details(l:uuid)
+            " Insert the notes header
+            " call append(line('$'), '')
+            call append(line('$') - 1, '## Notes')
             " put the cursor on the last line
             normal G
         endif
@@ -562,13 +556,36 @@ function! vimwiki_tasks#open_tasknotes()
     endif
 endfunction
 
+function! vimwiki_tasks#insert_task_details(uuid)
+    let l:details = vimwiki_tasks#load_full_task(a:uuid)
+    call append(0, '%% TaskUUID: '.a:uuid)
+    " TODO: don't hardcode markdown syntax
+    call append(1, '')
+    call append(2, '# '.<SID>Strip(l:details.description))
+    call append(3, '## Task details')
+    let l:i = 4
+    for l:detail in l:details.details
+        call append(l:i, l:detail)
+        let l:i += 1
+    endfor
+    call append(0 + l:i, '')
+    call append(1 + l:i, '## Annotations')
+    let l:i += 2
+    for l:annotation in l:details.annotations
+        call append(l:i, l:annotation)
+        let l:i += 1
+    endfor
+    call append(l:i, '')
+endfunction
+
 function! vimwiki_tasks#buffer_is_tasknote()
     return match(getline(1), '\v^\%\% TaskUUID: [0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}') != -1
 endfunction
 
 function! vimwiki_tasks#update_tasknote()
+    " TODO: error checking?
     let l:uuid = matchstr(getline(1), '\v^\%\% TaskUUID: \zs[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}')
-    let l:tw_task = vimwiki_tasks#load_task(l:uuid)
+    let l:tw_full_task = vimwiki_tasks#load_full_task(l:uuid)
     let l:i = 2
     let l:last_modified_line = ''
     let l:last_header_match = 0
@@ -596,8 +613,15 @@ function! vimwiki_tasks#update_tasknote()
         let l:i += 1
     endwhile
 
-    " execute '2,'.l:i.'delete'
+    " update the task if it is was updated
+    if l:last_modified_line != l:tw_full_task.last_modified
+        " remove the old copy of the task details
+        execute '1,'.l:i.'delete'
+        " and insert the new updated details
+        call vimwiki_tasks#insert_task_details(l:uuid)
+        redraw " get rid of the 'xx fewer lines'
+        let &mod = 1
+        echo "Updated the task details"
+    endif
 
-    " TODO: check if the task was updated
-    " TODO: if so, replace line(1) until line(l:i) with the new task content
 endfunction
