@@ -547,7 +547,7 @@ function! vimwiki_tasks#open_tasknotes()
             call vimwiki_tasks#insert_task_details(l:uuid)
             " Insert the notes header
             " call append(line('$'), '')
-            call append(line('$') - 1, '## Notes')
+            call append(line('$') - 1, <SID>CreateHeader('Notes'))
             " put the cursor on the last line
             normal G
         endif
@@ -559,17 +559,18 @@ endfunction
 function! vimwiki_tasks#insert_task_details(uuid)
     let l:details = vimwiki_tasks#load_full_task(a:uuid)
     call append(0, '%% TaskUUID: '.a:uuid)
-    " TODO: don't hardcode markdown syntax
     call append(1, '')
-    call append(2, '# '.<SID>Strip(l:details.description))
-    call append(3, '## Task details')
+    call append(2, <SID>Strip(l:details.description))
+    normal 3gg
+    call vimwiki#base#AddHeaderLevel()
+    call append(3, <SID>CreateHeader('Task details'))
     let l:i = 4
     for l:detail in l:details.details
         call append(l:i, l:detail)
         let l:i += 1
     endfor
     call append(0 + l:i, '')
-    call append(1 + l:i, '## Annotations')
+    call append(1 + l:i, <SID>CreateHeader('Annotations'))
     let l:i += 2
     for l:annotation in l:details.annotations
         call append(l:i, l:annotation)
@@ -597,8 +598,7 @@ function! vimwiki_tasks#update_tasknote()
             let l:last_modified_line = l:line
         endif
         " check if we already match the Annotations header
-        " TODO: don't hardcode markdown syntax
-        if match(l:line, '\v^## Annotations') != -1
+        if match(l:line, '\v^'.<SID>CreateHeader('Annotations')) != -1
             let l:last_header_match = 1
         endif
         " check if we are past the last header, then the first empty line
@@ -623,5 +623,12 @@ function! vimwiki_tasks#update_tasknote()
         let &mod = 1
         echo "Updated the task details"
     endif
+endfunction
 
+function! s:CreateHeader(header)
+    let hdr = g:vimwiki_rxH.g:vimwiki_rxH.' '.a:header
+    if g:vimwiki_symH
+        let hdr .= ' '.g:vimwiki_rxH.g:vimwiki_rxH
+    endif
+    return hdr
 endfunction
