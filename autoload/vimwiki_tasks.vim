@@ -495,6 +495,7 @@ function! vimwiki_tasks#update_task_lists()
 endfunction
 
 function! vimwiki_tasks#load_full_task(uuid)
+    " TODO: check how blocked and blocking tasks are presented
     let l:cmd = 'rc.verbose=labels rc.defaultwidth=999 rc.dateformat.info=Y-M-D\ H:N:S rc.color=off uuid:'.a:uuid.' info'
     let l:result = split(<SID>Task(l:cmd), '\n')
     let l:task_details = {'details': [], 'annotations': [], 'description': '', 'last_modified': ''}
@@ -530,17 +531,24 @@ function! vimwiki_tasks#load_full_task(uuid)
     return l:task_details
 endfunction
 
+function! s:TaskNotesPath()
+    let l:path = VimwikiGet('path')
+    let l:path .= vimwiki_tasks#config('note_path', '')
+    if match(l:path, '\v/$') == -1
+        let l:path .= '/'
+    endif
+    echom l:path
+    return l:path
+endfunction
+
 function! vimwiki_tasks#open_tasknotes()
-    " TODO: change config to be relative to the current wiki
     " TODO: load the correct task note path from the task annotations
-    " TODO: make sure that the note_path ends in a slash
-    let l:path = vimwiki_tasks#config('note_path', '~/vimwiki/tasks/')
     let l:line = getline(line('.'))
     " TODO: make sure it works on any UUID
     let l:uuid = matchstr(l:line, '\v\* \[.\].*#\zs[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}')
     if l:uuid != ''
         let l:tw_task = vimwiki_tasks#load_task(l:uuid)
-        let l:taskpath = l:path.l:uuid.".".expand('%:e')
+        let l:taskpath = <SID>TaskNotesPath().l:uuid.".".expand('%:e')
         execute "edit ".l:taskpath
         if glob(l:taskpath, 1) == ''
             " file does not yet exist on disk, fill the buffer with the initial content
