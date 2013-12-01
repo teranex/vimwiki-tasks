@@ -1,3 +1,4 @@
+" TODO: task add: description in quotes? (to fix (bw))
 " a list of open tasks which should be checked to see if they are completed
 " when the file is written
 let b:open_tasks = []
