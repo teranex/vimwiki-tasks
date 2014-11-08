@@ -39,7 +39,7 @@ function! vimwiki_tasks#write()
                             let l:continue =  confirm("The task was modified in taskwarrior after this file was opened. Which version do you want to keep?\nTaskwarrior: ".l:tw_task.description."\nVimwiki:     ".l:task.description, "&Taskwarrior\n&Vimwiki") > 1
                         endif
                         if l:continue
-                            call <SID>Task(l:task.task_args.' rc.confirmation=no uuid:'.l:task.uuid.
+                            call <SID>Task(l:task.task_args.' rc.confirmation=no '.l:task.uuid.
                                             \ ' modify '.shellescape(l:task.description).' '.
                                             \ <SID>JoinTags(l:task.tags_list).' '.<SID>TagsToRemove(l:tw_task.tags_list, l:task.tags_list).
                                             \ ' '.l:task.task_meta)
@@ -51,7 +51,7 @@ function! vimwiki_tasks#write()
         elseif match(l:line, '\v\* \[X\].*#[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}') != -1
             let l:task = vimwiki_tasks#parse_task(l:line, l:defaults)
             if index(b:open_tasks, l:task.uuid) >= 0
-                call <SID>Task('uuid:'.l:task.uuid.' done')
+                call <SID>Task(l:task.uuid.' done')
             endif
         endif
         let l:i += 1
@@ -236,7 +236,7 @@ endfunction
 
 function! vimwiki_tasks#load_task(uuid)
     let l:task = vimwiki_tasks#empty_task()
-    let l:cmd = 'rc.verbose=nothing rc.defaultwidth=999 rc.dateformat.info=Y-M-DTH:N:S rc.color=off uuid:'
+    let l:cmd = 'rc.verbose=nothing rc.defaultwidth=999 rc.dateformat.info=Y-M-DTH:N:S rc.color=off '
                     \ .a:uuid.' info | grep "^\(ID\|UUID\|Description\|Status\|Due\|Project\|Tags\|Last modified\)"'
     let l:result = split(<SID>Task(l:cmd), '\n')
     for l:result_line in l:result
@@ -497,7 +497,7 @@ endfunction
 
 function! vimwiki_tasks#load_full_task(uuid)
     " TODO: check how blocked and blocking tasks are presented
-    let l:cmd = 'rc.verbose=labels rc.defaultwidth=999 rc.dateformat.info=Y-M-D\ H:N:S rc.color=off uuid:'.a:uuid.' info'
+    let l:cmd = 'rc.verbose=labels rc.defaultwidth=999 rc.dateformat.info=Y-M-D\ H:N:S rc.color=off '.a:uuid.' info'
     let l:result = split(<SID>Task(l:cmd), '\n')
     let l:task_details = {'details': [], 'annotations': [], 'description': '', 'last_modified': ''}
     if len(l:result) > 5 " for a valid task we will have at least 5 lines or so
