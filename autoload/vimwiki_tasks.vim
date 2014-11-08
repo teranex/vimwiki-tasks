@@ -39,7 +39,7 @@ function! vimwiki_tasks#write()
                             let l:continue =  confirm("The task was modified in taskwarrior after this file was opened. Which version do you want to keep?\nTaskwarrior: ".l:tw_task.description."\nVimwiki:     ".l:task.description, "&Taskwarrior\n&Vimwiki") > 1
                         endif
                         if l:continue
-                            call <SID>Task(l:task.task_args.' rc.confirmation=no uuid:'.l:task.uuid.
+                            call <SID>Task(l:task.task_args.' rc.confirmation=no '.l:task.uuid.
                                             \ ' modify '.shellescape(l:task.description).' '.
                                             \ <SID>JoinTags(l:task.tags_list).' '.<SID>TagsToRemove(l:tw_task.tags_list, l:task.tags_list).
                                             \ ' '.l:task.task_meta)
@@ -51,7 +51,7 @@ function! vimwiki_tasks#write()
         elseif match(l:line, '\v\* \[X\].*#[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}') != -1
             let l:task = vimwiki_tasks#parse_task(l:line, l:defaults)
             if index(b:open_tasks, l:task.uuid) >= 0
-                call <SID>Task('uuid:'.l:task.uuid.' done')
+                call <SID>Task(l:task.uuid.' done')
             endif
         endif
         let l:i += 1
