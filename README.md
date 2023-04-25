@@ -1,5 +1,7 @@
 # vimwiki-tasks Vim plugin
 
+A similar (and maintained) plugin can be found here: https://github.com/tbabej/taskwiki
+
 ## NOTE
 This is a very early and very alpha version of the plugin. Use with caution and make a backup of
 your `.task` and `vimwiki` folder. You have been warned!
